@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
 import requests
 import re
@@ -6,62 +6,88 @@ import os
 import stat
 import subprocess
 
-def extraer_ultima_version_comunidad_linux():
-    url = "https://portswigger.net/burp/releases/community/latest"
-    response = requests.get(url)
-    
-    if response.status_code != 200:
-        print("Error al obtener la página.")
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
+
+DOWNLOAD_PAGE = "https://portswigger.net/burp/downloads"
+
+
+def obtener_version_y_url():
+    html = requests.get(DOWNLOAD_PAGE, headers=HEADERS).text
+
+    match = re.search(
+        r'burpsuite_linux_v(\d+)_(\d+)_(\d+)\.sh',
+        html
+    )
+
+    if not match:
+        print("[-] No se pudo detectar la versión.")
         return None
-    
-    html = response.text
-    
-    version_match = re.search(r'Professional / Community (\d+\.\d+\.\d+)', html)
-    if not version_match:
-        print("No se encontró la versión en la página.")
-        return None
-    
-    version = version_match.group(1)
-    print(f"Versión detectada: {version}")
-    
-    download_url = f"https://portswigger.net/burp/releases/download?product=community&version={version}&type=Linux"
-    
+
+    version = ".".join(match.groups())
+
+    download_url = (
+        "https://portswigger.net/burp/releases/download"
+        f"?product=desktop&version={version}&type=Linux"
+    )
+
+    print(f"[+] Versión detectada: {version}")
+    print(f"[+] URL: {download_url}")
+
     return version, download_url
 
-def descargar_burpsuite_linux(url, version):
-    file_name = f"burpsuite_community_linux_v{version}_64.sh"
-    
-    print(f"Descargando desde: {url}")
-    
-    with requests.get(url, stream=True) as r:
-        if r.status_code != 200:
-            print(f"Error al descargar: Status code {r.status_code}")
-            return None
-        
-        with open(file_name, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
+
+def descargar(url, version):
+    filename = f"burpsuite_linux_v{version.replace('.', '_')}.sh"
+
+    print(f"[+] Descargando: {filename}")
+
+    r = requests.get(url, headers=HEADERS, stream=True, allow_redirects=True)
+    r.raise_for_status()
+
+    with open(filename, "wb") as f:
+        for chunk in r.iter_content(8192):
+            if chunk:
                 f.write(chunk)
-    
-    print(f"Archivo descargado: {file_name}")
-    return file_name
 
-def dar_permisos_ejecucion(file_path):
-    st = os.stat(file_path)
-    os.chmod(file_path, st.st_mode | stat.S_IEXEC)
-    print(f"Permisos de ejecución asignados a: {file_path}")
+    size = os.path.getsize(filename)
 
-def ejecutar_instalador_con_sudo(file_path):
-    print(f"Ejecutando instalador con sudo: {file_path}")
-    try:
-        subprocess.run(["sudo", f"./{file_path}"], check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Error al ejecutar el instalador: {e}")
+    print(f"[+] Descargado OK ({size / (1024*1024):.2f} MB)")
+
+    return filename
+
+
+def dar_permisos(filename):
+    st = os.stat(filename)
+    os.chmod(filename, st.st_mode | stat.S_IEXEC)
+    print("[+] Permisos de ejecución asignados")
+
+
+def ejecutar(filename):
+    print("[+] Ejecutando instalador...")
+    subprocess.run(["sudo", f"./{filename}"], check=True)
+
+
+def main():
+    data = obtener_version_y_url()
+
+    if not data:
+        return
+
+    version, url = data
+
+    archivo = descargar(url, version)
+
+    dar_permisos(archivo)
+
+    opcion = input("\n¿Ejecutar instalador? (s/n): ").lower().strip()
+
+    if opcion == "s":
+        ejecutar(archivo)
+    else:
+        print("[+] Instalador descargado sin ejecutar")
+
 
 if __name__ == "__main__":
-    resultado = extraer_ultima_version_comunidad_linux()
-    if resultado:
-        version, url_descarga = resultado
-        archivo = descargar_burpsuite_linux(url_descarga, version)
-        if archivo:
-            dar_permisos_ejecucion(archivo)
-            ejecutar_instalador_con_sudo(archivo)
+    main()
