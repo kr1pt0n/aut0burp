@@ -106,4 +106,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n[+] Operación cancelada por el usuario")
+    except requests.RequestException as e:
+        print(f"\n[-] Error de red: {e}")
