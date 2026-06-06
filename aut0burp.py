@@ -4,12 +4,12 @@ import os
 import re
 import stat
 import subprocess
-import sys  # Necesario para actualizar la línea en la terminal
+import sys  # <--- Agregamos esto para poder borrar y actualizar la línea de la barra
 import requests
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-DOWNLOAD_PAGE = "https://portswigger.net"
+DOWNLOAD_PAGE = "https://portswigger.net/burp/downloads"
 
 
 def obtener_version_y_url():
@@ -24,7 +24,7 @@ def obtener_version_y_url():
     version = ".".join(match.groups())
 
     download_url = (
-        "https://portswigger.net"
+        "https://portswigger.net/burp/releases/download"
         f"?product=desktop&version={version}&type=Linux"
     )
 
@@ -37,13 +37,14 @@ def obtener_version_y_url():
 def descargar(url, version):
     filename = f"burpsuite_linux_v{version.replace('.', '_')}.sh"
 
-    # Usamos sys.stdout.write sin el salto de línea al final para mantener el cursor ahí
+    # 1. Quitamos el print normal y usamos sys.stdout.write sin salto de línea
     sys.stdout.write(f"[+] Descargando: {filename} ")
     sys.stdout.flush()
 
     r = requests.get(url, headers=HEADERS, stream=True, allow_redirects=True)
     r.raise_for_status()
 
+    # Obtenemos el tamaño total del archivo que manda el servidor
     total_size = int(r.headers.get("content-length", 0))
     descargado = 0
 
@@ -51,19 +52,20 @@ def descargar(url, version):
         for chunk in r.iter_content(8192):
             if chunk:
                 f.write(chunk)
-                descargado += len(chunk)
+                descargado += len(chunk)  # Sumamos los bytes que van llegando
 
+                # Si el servidor nos dio el tamaño, calculamos la barra real
                 if total_size > 0:
                     porcentaje = (descargado / total_size) * 100
                     bloques = int(30 * descargado / total_size)
 
-                    # El \r vuelve al inicio, reimprime el texto fijo y luego actualiza la barra
+                    # 2. Con \r volvemos al inicio y volvemos a pintar tu mensaje más la barra al lado
                     sys.stdout.write(
                         f"\r[+] Descargando: {filename} [{'█' * bloques}{'.' * (30 - bloques)}] {porcentaje:.1f}%"
                     )
                     sys.stdout.flush()
 
-    # Damos el salto de línea final al terminar la descarga completa
+    # Damos un salto de línea al terminar la barra
     print()
 
     size = os.path.getsize(filename)
